@@ -1,0 +1,25 @@
+{
+  "name": "elderly-care-system",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "ant-design-vue": "^4.2.5",
+    "axios": "^1.13.6",
+    "echarts": "^5.5.1",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.13",
+    "vue-router": "^4.4.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.3",
+    "vue-tsc": "^2.1.10"
+  }
+}
