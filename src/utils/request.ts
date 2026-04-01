@@ -3,7 +3,7 @@ import { message } from 'ant-design-vue';
 
 // 创建 axios 实例
 const service = axios.create({
-  baseURL: 'http://localhost:3005/api', 
+  baseURL: 'https://my-backend-931i.onrender.com', 
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
