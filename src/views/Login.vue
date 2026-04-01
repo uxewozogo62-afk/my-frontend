@@ -25,8 +25,6 @@
       </a-form>
       
       <div class="login-tips">
-        <p v-if="loginType === 'family'">家属登录默认账号: family / 密码: 123456</p>
-        <p v-else>管理员登录默认账号: admin / 密码: 123456</p>
         <p class="register-link">新用户？<a href="/register" @click.prevent="router.push('/register')">点击注册</a></p>
       </div>
     </div>
