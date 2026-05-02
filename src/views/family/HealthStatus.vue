@@ -38,12 +38,14 @@
         <span class="update-time">最后更新: {{ lastUpdateTime }}</span>
       </template>
       <div class="metrics-grid">
-        <div v-for="metric in healthMetrics" :key="metric.label" class="metric-item">
+        <!-- 重点修改：key 使用 key 字段更稳健 -->
+        <div v-for="metric in healthMetrics" :key="metric.key" class="metric-item">
           <div class="metric-label">{{ metric.label }}</div>
           <div class="metric-value">
             {{ metric.value }}<span class="unit">{{ metric.unit }}</span>
           </div>
-          <div :class="['metric-status', metric.status]">
+          <!-- 重点修改：通过 v-if 判断。步数项没有 status，不会渲染此标签 -->
+          <div v-if="metric.status" :class="['metric-status', metric.status]">
             {{ metric.status === 'normal' ? '正常' : '异常' }}
           </div>
         </div>
@@ -138,14 +140,14 @@ const timeRange = ref('week')
 const selectedMetrics = ref(['heartRate', 'bloodOxygen'])
 const isEmergencyModalOpen = ref(false)
 
-// 健康指标数据
+// 健康指标数据（执行多退少补：删除睡眠呼吸，增加步数）[cite: 2]
 const healthMetrics = ref([
-  { label: '心率', value: 105, unit: 'bpm', status: 'abnormal' },
-  { label: '血氧', value: 98, unit: '%', status: 'normal' },
-  { label: '血压', value: '120/80', unit: 'mmHg', status: 'normal' },
-  { label: '体温', value: 36.6, unit: '℃', status: 'normal' },
-  { label: '睡眠质量', value: 85, unit: '分', status: 'normal' },
-  { label: '呼吸频率', value: 18, unit: '次/分', status: 'normal' }
+  { label: '心率', value: 105, unit: 'bpm', status: 'abnormal', key: 'heartRate' },
+  { label: '血氧', value: 98, unit: '%', status: 'normal', key: 'bloodOxygen' },
+  { label: '血压', value: '120/80', unit: 'mmHg', status: 'normal', key: 'bloodPressure' },
+  { label: '体温', value: 36.6, unit: '℃', status: 'normal', key: 'bodyTemperature' },
+  // 步数项：只保留数值展现，不设置 status 属性[cite: 2]
+  { label: '今日步数', value: 5432, unit: '步', key: 'activitySteps' }
 ])
 
 // 模拟运动趋势数据
@@ -201,32 +203,32 @@ const handleIgnoreWarning = () => {
   message.info('已忽略本次警告')
 }
 
-// 从后端获取健康数据
+// 从后端获取健康数据[cite: 2]
 const fetchHealthData = async () => {
   try {
-    const elderlyId = '1'; // 实际应用中应从路由或状态管理获取
-    
-    // 获取实时数据
+    const elderlyId = '1'; 
     const realtime = await healthApi.getRealtime(elderlyId);
     if (realtime) {
-      healthMetrics.value[0].value = realtime.heartRate;
-      healthMetrics.value[1].value = realtime.bloodOxygen;
-      healthMetrics.value[3].value = realtime.bodyTemperature;
-      healthMetrics.value[2].value = realtime.bloodPressure;
+      // 重点修改：通过数组循环匹配 key 来赋值，更安全[cite: 2]
+      healthMetrics.value.forEach(metric => {
+        if (realtime[metric.key] !== undefined) {
+          metric.value = realtime[metric.key];
+        }
+      });
       
+      // 同步更新页面上方的 todaySteps 变量[cite: 2]
+      if (realtime.activitySteps !== undefined) {
+        todaySteps.value = realtime.activitySteps;
+      }
+
       // 更新最后更新时间
       if (realtime.timestamp) {
         const date = new Date(realtime.timestamp);
         lastUpdateTime.value = date.toLocaleTimeString();
       }
     }
-    
-    // 获取历史趋势数据（可选，这里先用模拟数据填充）
-    // const history = await healthApi.getHistory(elderlyId);
-    
   } catch (error: any) {
     console.error('获取健康数据失败:', error);
-    // 如果 404，拦截器已经弹出错误，这里可以做降级处理
   }
 }
 
@@ -399,7 +401,8 @@ onMounted(async () => {
 }
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  /* 重点修改：改为 5 列布局，对应 5 个指标 */
+  grid-template-columns: repeat(5, 1fr);
   gap: 16px;
 }
 .metric-item {
