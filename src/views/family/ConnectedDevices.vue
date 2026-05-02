@@ -102,31 +102,15 @@ const form = reactive({ name: '', age: 70, deviceId: '', relation: '亲属' });
 // 获取数据
 const fetchStatus = async () => {
   try {
-    // 1. 发送请求。由于 request.js 已经带了 /api，这里不需要再加 /api[cite: 6, 7]
-    const data = await request.get(`/family/my-elderly/${userId}`); 
-    
-    console.log('拦截器处理后的数据:', data); 
-
-    // 2. 此时 data 直接就是后端返回的那个数组[cite: 7]
-    if (Array.isArray(data) && data.length > 0) {
-      hasBinding.value = true;[cite: 6]
-      const info = data[0];[cite: 6]
-      
-      deviceInfo.value = {
-        ...info,
-        // 兼容后端转换后的 id 字段[cite: 4, 6]
-        device_id_str: info.device_id_str || info.id 
-      };
-      
-      form.name = info.name;[cite: 6]
-      form.age = info.age;[cite: 6]
-    } else {
-      hasBinding.value = false;[cite: 6]
+    const res = await request.get(`/family/my-elderly/${userId}`);
+    if (res && res.length > 0) {
+      hasBinding.value = true;
+      deviceInfo.value = res[0];
+      // 预填表单，方便“更换”
+      form.name = res[0].name;
+      form.age = res[0].age;
     }
-  } catch (e) { 
-    console.error('获取绑定状态失败:', e); 
-    hasBinding.value = false;[cite: 6]
-  }
+  } catch (e) { console.error(e); }
 };
 
 const handleFullSetup = async () => {
