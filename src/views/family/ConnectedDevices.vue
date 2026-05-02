@@ -100,37 +100,45 @@ const confirmLoading = ref(false);
 const form = reactive({ name: '', age: 70, deviceId: '', relation: '亲属' });
 
 // 获取数据
-// 修改 ConnectedDevices_3.vue 中的 fetchStatus
 const fetchStatus = async () => {
   try {
-    // 1. 发送请求。request 已经配置了 baseURL，所以这里写相对路径即可[cite: 7, 8]
-    const data = await request.get(`/family/my-elderly/${userId}`);
-    
-    // 2. 调试日志：打开浏览器控制台(F12)查看这个打印
-    console.log('后端返回的原始数据:', data);
+    // 1. 发送请求：axios 实例已经配置了 baseURL 和 /api 前缀
+    // 注意：确保 userId 已经从 localStorage 正确获取[cite: 6]
+    if (!userId) {
+      console.error('未找到用户 ID，请重新登录');
+      return;
+    }
 
-    // 3. 这里的 data 已经是被拦截器剥离出的数组了[cite: 7]
-    if (Array.isArray(data) && data.length > 0) {
-      hasBinding.value = true;[cite: 8]
+    const res = await request.get(`/family/my-elderly/${userId}`);[cite: 6]
+    
+    // 2. 关键排查：因为拦截器里写了 return res.data[cite: 5]
+    // 这里的 res 变量其实已经是后端返回的那个数组本身了
+    console.log('后端返回数据详情:', res); 
+
+    // 3. 严谨的数组判断[cite: 6]
+    if (res && Array.isArray(res) && res.length > 0) {
+      hasBinding.value = true;[cite: 6]
       
-      // 4. 取第一条记录并确保字段名对齐[cite: 8]
-      const info = data[0];
+      // 4. 获取第一条记录并处理字段兼容性
+      const info = res[0];[cite: 6]
       deviceInfo.value = {
         ...info,
-        // 关键：如果后端返回的是 id，则映射到 device_id_str
-        device_id_str: info.device_id_str || info.id 
+        // 兼容处理：如果后端返回的是 id，则映射到模板需要的 device_id_str[cite: 2, 6]
+        device_id_str: info.device_id_str || info.id || '未知序列号' 
       };
       
-      // 5. 预填表单[cite: 8]
-      form.name = info.name;
-      form.age = info.age;
+      // 5. 预填表单[cite: 6]
+      form.name = info.name || '';
+      form.age = info.age || 70;
     } else {
-      console.warn('数据库中未查询到与该 userId 关联的老人设备数据');
-      hasBinding.value = false;[cite: 8]
+      // 如果返回空数组，说明该用户没绑定老人[cite: 6]
+      hasBinding.value = false;[cite: 6]
     }
   } catch (e) { 
-    console.error('获取绑定状态失败，请检查后端服务是否启动或路径是否正确:', e); 
-    hasBinding.value = false;[cite: 8]
+    // 这里会捕获 404、500 等网络错误[cite: 5]
+    console.error('获取绑定状态时发生错误:', e); 
+    hasBinding.value = false; 
+    message.error('无法连接到服务器，请检查后端运行状态');
   }
 };
 
