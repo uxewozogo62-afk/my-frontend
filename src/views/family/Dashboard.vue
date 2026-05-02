@@ -42,7 +42,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 // 导入你补全后的 API 对象[cite: 8]
-import { familyApi } from '../../api/index_4'; 
+import { familyApi } from '../../api/index'; 
 
 const hasBinding = ref(false);
 const elderlyInfo = ref({});
