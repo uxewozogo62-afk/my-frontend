@@ -100,17 +100,38 @@ const confirmLoading = ref(false);
 const form = reactive({ name: '', age: 70, deviceId: '', relation: '亲属' });
 
 // 获取数据
+// 修改 ConnectedDevices_3.vue 中的 fetchStatus
 const fetchStatus = async () => {
   try {
-    const res = await request.get(`/family/my-elderly/${userId}`);
-    if (res && res.length > 0) {
-      hasBinding.value = true;
-      deviceInfo.value = res[0];
-      // 预填表单，方便“更换”
-      form.name = res[0].name;
-      form.age = res[0].age;
+    // 1. 发送请求。request 已经配置了 baseURL，所以这里写相对路径即可[cite: 7, 8]
+    const data = await request.get(`/family/my-elderly/${userId}`);
+    
+    // 2. 调试日志：打开浏览器控制台(F12)查看这个打印
+    console.log('后端返回的原始数据:', data);
+
+    // 3. 这里的 data 已经是被拦截器剥离出的数组了[cite: 7]
+    if (Array.isArray(data) && data.length > 0) {
+      hasBinding.value = true;[cite: 8]
+      
+      // 4. 取第一条记录并确保字段名对齐[cite: 8]
+      const info = data[0];
+      deviceInfo.value = {
+        ...info,
+        // 关键：如果后端返回的是 id，则映射到 device_id_str
+        device_id_str: info.device_id_str || info.id 
+      };
+      
+      // 5. 预填表单[cite: 8]
+      form.name = info.name;
+      form.age = info.age;
+    } else {
+      console.warn('数据库中未查询到与该 userId 关联的老人设备数据');
+      hasBinding.value = false;[cite: 8]
     }
-  } catch (e) { console.error(e); }
+  } catch (e) { 
+    console.error('获取绑定状态失败，请检查后端服务是否启动或路径是否正确:', e); 
+    hasBinding.value = false;[cite: 8]
+  }
 };
 
 const handleFullSetup = async () => {
