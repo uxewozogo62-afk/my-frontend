@@ -102,27 +102,22 @@ const form = reactive({ name: '', age: 70, deviceId: '', relation: '亲属' });
 // 获取数据
 const fetchStatus = async () => {
   try {
-    // 检查是否有用户ID
     if (!userId) return;
 
-    // 发送请求
+    // 发送请求，request.js 已配置 baseURL
     const res = await request.get(`/family/my-elderly/${userId}`);
     
-    // 调试打印：如果编译成功，你可以在浏览器 F12 看到这个
-    console.log('数据返回成功:', res);
-
-    // 适配拦截器剥离后的数据 (res 直接就是数组)
+    // res 已经被拦截器剥离，直接是数组
     if (res && Array.isArray(res) && res.length > 0) {
       hasBinding.value = true;
       const info = res[0];
       
-      // 字段兼容性处理
+      // 这里的赋值不能带有任何 [cite] 标记
       deviceInfo.value = {
         ...info,
-        device_id_str: info.device_id_str || info.id || '无序列号'[cite: 4]
+        device_id_str: info.device_id_str || info.id || '无序列号'
       };
       
-      // 填充表单
       form.name = info.name || '';
       form.age = info.age || 70;
     } else {
