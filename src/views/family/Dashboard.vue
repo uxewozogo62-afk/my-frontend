@@ -42,7 +42,7 @@ const getWarningText = (level) => {
 
 const checkStatus = async () => {
   try {
-    const res = await request.get(`/family/my-elderly/${userId}`);
+    const res = await request.get(`/api/family/my-elderly/${userId}`);
     if (res && res.length > 0) {
       hasBinding.value = true;
       elderlyInfo.value = res[0];
