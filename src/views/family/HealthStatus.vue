@@ -4,64 +4,48 @@
     
     <!-- 1. 风险预警条 -->
     <div class="warning-bar">
-      <a-alert
-        v-if="hasWarning"
-        type="warning"
-        show-icon
-        class="health-alert"
-      >
+      <a-alert v-if="hasWarning" type="warning" show-icon class="health-alert">
         <template #message>
           <div class="warning-content">
             <span class="warning-level">风险等级：<span :class="['level-value', warningLevel]">{{ warningLevelText }}</span></span>
             <div class="warning-actions">
               <a-button size="small" type="primary" danger @click="handleEmergencyCall">紧急呼叫</a-button>
-              <a-button size="small" @click="handleIgnoreWarning">忽略警告</a-button>
             </div>
           </div>
         </template>
-        <template #description>
-          检测到老人健康指标异常，请及时关注！
-        </template>
+        <template #description>检测到老人健康指标异常，请及时关注！</template>
       </a-alert>
-      <a-alert
-        v-else
-        type="success"
-        message="当前健康状态良好"
-        description="所有指标均在正常范围内，未检测到异常风险。"
-        show-icon
-      />
+      <a-alert v-else type="success" message="当前健康状态良好" description="所有指标均在正常范围内。" show-icon />
     </div>
 
-    <!-- 2. 核心健康指标卡片 -->
+    <!-- 2. 核心指标卡片 -->
     <a-card title="实时指标" class="metrics-card">
       <template #extra>
-        <span class="update-time">最后更新: {{ lastUpdateTime }}</span>
+        <!-- 重点：此处显示数据库中的 timestamp -->
+        <span class="update-time" style="color: #1890ff; font-weight: bold;">
+          数据采集时间: {{ lastUpdateTime }}
+        </span>
       </template>
       <div class="metrics-grid">
         <div v-for="metric in healthMetrics" :key="metric.key" class="metric-item">
           <div class="metric-label">{{ metric.label }}</div>
-          <div class="metric-value">
-            {{ metric.value }}<span class="unit">{{ metric.unit }}</span>
-          </div>
-          <div :class="['metric-status', metric.status]">
-            {{ metric.status === 'normal' ? '正常' : '异常' }}
-          </div>
+          <div class="metric-value">{{ metric.value }}<span class="unit">{{ metric.unit }}</span></div>
+          <div :class="['metric-status', metric.status]">{{ metric.status === 'normal' ? '正常' : '异常' }}</div>
         </div>
       </div>
     </a-card>
 
-    <!-- 3. 运动数据 -->
+    <!-- 3. 今日运动 -->
     <a-card title="今日运动" class="activity-card">
       <div class="activity-content">
         <div class="activity-item">
-          <div class="activity-icon">
-            <step-forward-outlined />
-          </div>
+          <div class="activity-icon"><step-forward-outlined /></div>
           <div class="activity-info">
-            <div class="activity-label">今日步数</div>
+            <div class="activity-label">今日累积步数</div>
+            <!-- 重点：此处对接 activitySteps -->
             <div class="activity-value">{{ todaySteps }}</div>
             <div class="activity-target">目标: 8000步</div>
-            <a-progress :percent="Math.min(100, Math.floor(todaySteps/8000*100))" size="small" />
+            <a-progress :percent="Math.min(100, Math.floor(todaySteps/8000*100))" status="active" />
           </div>
         </div>
       </div>
@@ -71,22 +55,15 @@
       </div>
     </a-card>
 
-    <!-- 4. 健康趋势图表 (多选框已彻底回归) -->
+    <!-- 4. 健康趋势图表 -->
     <a-card title="健康趋势" class="trend-card">
       <template #extra>
         <div class="trend-controls">
-          <a-radio-group v-model:value="timeRange" size="small" class="time-range-group">
+          <a-radio-group v-model:value="timeRange" size="small">
             <a-radio-button value="week">最近一周</a-radio-button>
             <a-radio-button value="month">最近一月</a-radio-button>
           </a-radio-group>
-          <!-- 核心：多选切换逻辑 -->
-          <a-select
-            v-model:value="selectedMetrics"
-            mode="multiple"
-            placeholder="选择指标"
-            style="width: 240px; margin-left: 16px"
-            size="small"
-          >
+          <a-select v-model:value="selectedMetrics" mode="multiple" style="width: 240px; margin-left: 16px" size="small">
             <a-select-option value="heartRate">心率</a-select-option>
             <a-select-option value="bloodOxygen">血氧</a-select-option>
             <a-select-option value="bloodPressure">血压</a-select-option>
@@ -96,18 +73,6 @@
       </template>
       <div id="healthChart" style="height: 400px; width: 100%;"></div>
     </a-card>
-
-    <!-- 紧急呼叫确认弹窗 -->
-    <a-modal
-      v-model:open="isEmergencyModalOpen"
-      title="紧急呼叫确认"
-      @ok="confirmEmergencyCall"
-      ok-text="确认呼叫"
-      cancel-text="取消"
-      :ok-button-props="{ danger: true }"
-    >
-      <p>系统将立即联系社区医生和您的紧急联系人，并开启双向语音通话。是否继续？</p>
-    </a-modal>
   </div>
 </template>
 
@@ -121,16 +86,14 @@ import { healthApi } from '../../api/index'
 
 const route = useRoute()
 
-// 状态变量定义
+// 响应式状态
 const hasWarning = ref(false)
 const warningLevel = ref('low')
 const lastUpdateTime = ref('--:--:--')
 const todaySteps = ref(0) 
 const timeRange = ref('week')
-const selectedMetrics = ref(['heartRate', 'bloodOxygen']) // 默认选中心率和血氧
-const isEmergencyModalOpen = ref(false)
+const selectedMetrics = ref(['heartRate', 'bloodOxygen'])
 
-// 基础健康指标结构
 const healthMetrics = ref([
   { label: '心率', value: '--', unit: 'bpm', status: 'normal', key: 'heartRate' },
   { label: '血氧', value: '--', unit: '%', status: 'normal', key: 'bloodOxygen' },
@@ -138,7 +101,7 @@ const healthMetrics = ref([
   { label: '体温', value: '--', unit: '℃', status: 'normal', key: 'bodyTemperature' }
 ])
 
-// 模拟趋势数据 (保留用于渲染折线图)
+// 模拟趋势数据（供下方折线图使用）
 const healthTrendData = ref({
   week: {
     dates: ['周一', '周二', '周三', '周四', '周五', '周六', '今日'],
@@ -161,153 +124,140 @@ const warningLevelText = computed(() => {
   return map[warningLevel.value] || '未知'
 })
 
-// 数据交互函数
-const handleEmergencyCall = () => { isEmergencyModalOpen.value = true }
-const confirmEmergencyCall = () => {
-  message.loading('正在呼叫紧急联系人...', 1.5)
-  setTimeout(() => {
-    message.success('呼叫成功，请保持电话畅通')
-    isEmergencyModalOpen.value = false
-  }, 1500)
-}
-const handleIgnoreWarning = () => {
-  hasWarning.value = false
-  message.info('已忽略本次警告')
-}
-
-// 核心：对接后端数据并刷新步数
+// 核心数据获取逻辑
 const fetchHealthData = async () => {
   try {
-    const elderlyId = route.query.id as string || '1'; 
-    const realtime = await healthApi.getRealtime(elderlyId);
+    const elderlyId = route.query.id as string || '1'
+    const realtime = await healthApi.getRealtime(elderlyId)
     
+    console.log('数据库实时数据载入:', realtime) // 方便你调试
+
     if (realtime) {
-      // 1. 同步指标值
-      healthMetrics.value.forEach(metric => {
-        if (realtime[metric.key] !== undefined) {
-          metric.value = realtime[metric.key];
-          // 心率范围判断
-          if (metric.key === 'heartRate') {
-            metric.status = (metric.value > 100 || metric.value < 60) ? 'abnormal' : 'normal';
-          }
-        }
-      });
-      
-      // 2. 核心：同步步数（处理多种可能的字段名）
-      todaySteps.value = realtime.activitySteps ?? realtime.steps ?? realtime.todaySteps ?? 0;
-      
-      // 3. 强制触发步数图表重绘
-      await nextTick();
-      if (activityChart) {
-        updateActivityChart();
+      // 1. 步数赋值：精准对接 activitySteps
+      if (realtime.activitySteps !== undefined) {
+        todaySteps.value = Number(realtime.activitySteps)
       }
 
-      hasWarning.value = healthMetrics.value.some(m => m.status === 'abnormal');
+      // 2. 时间赋值：精准对接 timestamp
       if (realtime.timestamp) {
-        lastUpdateTime.value = new Date(realtime.timestamp).toLocaleTimeString();
+        const dateObj = new Date(realtime.timestamp)
+        // 格式化为：2026/05/02 20:08:57 形式，你可以根据需要调整
+        lastUpdateTime.value = dateObj.toLocaleString('zh-CN', { 
+          hour12: false,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        })
       }
+
+      // 3. 各项健康指标同步
+      healthMetrics.value.forEach(metric => {
+        if (realtime[metric.key] !== undefined) {
+          metric.value = realtime[metric.key]
+          // 预警逻辑判断
+          if (metric.key === 'heartRate') {
+            metric.status = (metric.value > 100 || metric.value < 60) ? 'abnormal' : 'normal'
+          }
+        }
+      })
+
+      hasWarning.value = healthMetrics.value.some(m => m.status === 'abnormal')
     }
-  } catch (error: any) {
-    console.error('获取健康数据失败:', error);
+  } catch (error) {
+    console.error('API请求失败:', error)
+    message.error('无法同步数据库健康数据')
   }
 }
 
-// 图表逻辑管理
 let activityChart: echarts.ECharts | null = null
 let healthChart: echarts.ECharts | null = null
 
-const initCharts = () => {
-  const actDom = document.getElementById('activityChart');
-  const hthDom = document.getElementById('healthChart');
-  
-  if (actDom) {
-    activityChart = echarts.init(actDom);
-    updateActivityChart();
-  }
-  if (hthDom) {
-    healthChart = echarts.init(hthDom);
-    updateHealthChart();
-  }
-}
-
 const updateActivityChart = () => {
-  if (!activityChart) return;
+  const dom = document.getElementById('activityChart')
+  if (!dom) return
+  if (!activityChart) activityChart = echarts.init(dom)
+  
   activityChart.setOption({
     tooltip: { trigger: 'axis' },
     xAxis: { type: 'category', data: ['周一', '周二', '周三', '周四', '周五', '周六', '今日'] },
-    yAxis: { type: 'value', name: '步数' },
+    yAxis: { type: 'value' },
     series: [{
       name: '步数',
       type: 'bar',
-      // 这里确保最后一位是实时获取的 todaySteps.value
+      // 最后一项动态绑定 todaySteps
       data: [4200, 5100, 6300, 4800, 7200, 5432, todaySteps.value],
       itemStyle: { color: '#1890ff', borderRadius: [4, 4, 0, 0] }
     }]
-  }, true);
+  }, true)
 }
 
 const updateHealthChart = () => {
-  if (!healthChart) return;
-  const data = healthTrendData.value[timeRange.value as 'week' | 'month'];
-  const metricNameMap: Record<string, string> = {
-    heartRate: '心率',
-    bloodOxygen: '血氧',
-    bloodPressure: '血压',
-    bodyTemperature: '体温'
-  };
+  const dom = document.getElementById('healthChart')
+  if (!dom) return
+  if (!healthChart) healthChart = echarts.init(dom)
 
+  const data = healthTrendData.value[timeRange.value as 'week' | 'month']
+  const nameMap: Record<string, string> = { heartRate: '心率', bloodOxygen: '血氧', bloodPressure: '血压', bodyTemperature: '体温' }
+  
   const series = selectedMetrics.value.map(metric => ({
-    name: metricNameMap[metric],
+    name: nameMap[metric],
     type: 'line',
     smooth: true,
     data: (data as any)[metric]
-  }));
+  }))
 
   healthChart.setOption({
     tooltip: { trigger: 'axis' },
     legend: { data: series.map(s => s.name), bottom: 10 },
-    grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
     xAxis: { type: 'category', boundaryGap: false, data: data.dates },
     yAxis: { type: 'value' },
     series
-  }, true);
+  }, true)
 }
 
-// 监听控制变量
-watch([timeRange, selectedMetrics], () => { 
-  updateHealthChart(); 
+// 监听步数变化，实时重绘柱状图
+watch(todaySteps, () => {
+  nextTick(() => updateActivityChart())
+})
+
+// 监听趋势配置变化
+watch([timeRange, selectedMetrics], () => {
+  updateHealthChart()
 })
 
 onMounted(async () => {
-  await fetchHealthData(); // 优先拿数据
-  initCharts();
+  // 1. 先拿数据（会给 todaySteps 赋值）
+  await fetchHealthData()
+  
+  // 2. 初始化图表（此时 updateActivityChart 会读取到最新的 todaySteps）
+  updateActivityChart()
+  updateHealthChart()
+  
   window.addEventListener('resize', () => {
-    activityChart?.resize();
-    healthChart?.resize();
-  });
+    activityChart?.resize()
+    healthChart?.resize()
+  })
 })
 </script>
 
 <style scoped>
-.health-status { display: flex; flex-direction: column; gap: 24px; padding: 20px; background-color: #fff; min-height: 100vh; }
-.page-title { font-size: 24px; font-weight: bold; color: #333; margin: 0; }
-.warning-bar { margin-bottom: 8px; }
+.health-status { display: flex; flex-direction: column; gap: 24px; padding: 20px; background-color: #fff; }
+.page-title { font-size: 24px; font-weight: bold; }
 .warning-content { display: flex; justify-content: space-between; align-items: center; width: 100%; }
-.level-value { margin-left: 8px; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
+.level-value { margin-left: 8px; font-weight: bold; }
 .level-value.low { color: #52c41a; }
 .level-value.medium { color: #faad14; }
 .level-value.high { color: #f5222d; }
 .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .metric-item { padding: 20px; background-color: #fcfcfc; border: 1px solid #f0f0f0; border-radius: 8px; text-align: center; }
-.metric-label { color: #8c8c8c; margin-bottom: 8px; }
 .metric-value { font-size: 28px; font-weight: bold; color: #262626; }
-.unit { font-size: 14px; margin-left: 4px; color: #8c8c8c; }
-.metric-status { margin-top: 8px; font-size: 12px; }
 .metric-status.normal { color: #52c41a; }
 .metric-status.abnormal { color: #f5222d; }
 .activity-item { display: flex; align-items: center; padding: 24px; background-color: #fafafa; border-radius: 8px; margin-bottom: 20px; }
 .activity-icon { font-size: 40px; color: #1890ff; margin-right: 20px; }
-.activity-info { flex: 1; }
 .activity-value { font-size: 32px; font-weight: bold; color: #1890ff; }
 .trend-controls { display: flex; align-items: center; }
 </style>
