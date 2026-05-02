@@ -61,7 +61,6 @@
             <div class="activity-label">今日步数</div>
             <div class="activity-value">{{ todaySteps }}</div>
             <div class="activity-target">目标: 8000步</div>
-            <!-- 动态步数进度条[cite: 4] -->
             <a-progress :percent="Math.min(100, Math.floor(todaySteps/8000*100))" size="small" />
           </div>
         </div>
@@ -72,7 +71,7 @@
       </div>
     </a-card>
 
-    <!-- 4. 健康趋势图表 -->
+    <!-- 4. 健康趋势图表 (多选框已回归)[cite: 4] -->
     <a-card title="健康趋势" class="trend-card">
       <template #extra>
         <div class="trend-controls">
@@ -80,6 +79,19 @@
             <a-radio-button value="week">最近一周</a-radio-button>
             <a-radio-button value="month">最近一月</a-radio-button>
           </a-radio-group>
+          <!-- 关键：恢复多选框逻辑[cite: 4] -->
+          <a-select
+            v-model:value="selectedMetrics"
+            mode="multiple"
+            placeholder="选择指标"
+            style="width: 200px; margin-left: 16px"
+            size="small"
+          >
+            <a-select-option value="heartRate">心率</a-select-option>
+            <a-select-option value="bloodOxygen">血氧</a-select-option>
+            <a-select-option value="bloodPressure">血压</a-select-option>
+            <a-select-option value="bodyTemperature">体温</a-select-option>
+          </a-select>
         </div>
       </template>
       <div id="healthChart" style="height: 400px; width: 100%;"></div>
@@ -101,30 +113,46 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
-import { useRoute } from 'vue-router' // 引入路由对象[cite: 4]
+import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { StepForwardOutlined } from '@ant-design/icons-vue'
 import * as echarts from 'echarts'
 import { healthApi } from '../../api/index'
 
-const route = useRoute();
+const route = useRoute()
 
 // 状态定义
 const hasWarning = ref(false)
 const warningLevel = ref('low')
 const lastUpdateTime = ref('--:--:--')
-const todaySteps = ref(0) // 初始设为 0[cite: 4]
+const todaySteps = ref(0) 
 const timeRange = ref('week')
-const selectedMetrics = ref(['heartRate', 'bloodOxygen'])
+const selectedMetrics = ref(['heartRate', 'bloodOxygen']) // 默认勾选项[cite: 4]
 const isEmergencyModalOpen = ref(false)
 
-// 健康指标数据：初始状态统一为 normal[cite: 4]
 const healthMetrics = ref([
-  { label: '心率', value:'--', unit: 'bpm', status: 'normal', key: 'heartRate' },
+  { label: '心率', value: '--', unit: 'bpm', status: 'normal', key: 'heartRate' },
   { label: '血氧', value: '--', unit: '%', status: 'normal', key: 'bloodOxygen' },
   { label: '血压', value: '--', unit: 'mmHg', status: 'normal', key: 'bloodPressure' },
   { label: '体温', value: '--', unit: '℃', status: 'normal', key: 'bodyTemperature' }
 ])
+
+const healthTrendData = ref({
+  week: {
+    dates: ['周一', '周二', '周三', '周四', '周五', '周六', '今日'],
+    heartRate: [72, 75, 78, 74, 82, 75, 76],
+    bloodOxygen: [98, 97, 98, 99, 98, 98, 97],
+    bloodPressure: [118, 120, 122, 119, 125, 120, 118],
+    bodyTemperature: [36.5, 36.6, 36.4, 36.7, 36.6, 36.6, 36.5]
+  },
+  month: {
+    dates: Array.from({ length: 30 }, (_, i) => `${i + 1}日`),
+    heartRate: Array.from({ length: 30 }, () => Math.floor(Math.random() * 20) + 70),
+    bloodOxygen: Array.from({ length: 30 }, () => Math.floor(Math.random() * 3) + 97),
+    bloodPressure: Array.from({ length: 30 }, () => Math.floor(Math.random() * 10) + 115),
+    bodyTemperature: Array.from({ length: 30 }, () => (Math.random() * 0.5 + 36.3).toFixed(1))
+  }
+})
 
 const warningLevelText = computed(() => {
   const map: Record<string, string> = { low: '低', medium: '中', high: '高' }
@@ -144,32 +172,32 @@ const handleIgnoreWarning = () => {
   message.info('已忽略本次警告')
 }
 
-// 核心逻辑：获取数据库信息并渲染[cite: 4]
+// 核心：数据获取逻辑[cite: 4]
 const fetchHealthData = async () => {
   try {
-    // 1. 获取 Dashboard 传过来的 ID[cite: 4]
     const elderlyId = route.query.id as string || '1'; 
     const realtime = await healthApi.getRealtime(elderlyId);
     
     if (realtime) {
-      // 2. 动态同步核心指标[cite: 4]
+      // 指标更新
       healthMetrics.value.forEach(metric => {
         if (realtime[metric.key] !== undefined) {
           metric.value = realtime[metric.key];
-          
-          // 动态判断状态：心率 60-100 为正常[cite: 4]
           if (metric.key === 'heartRate') {
             metric.status = (metric.value > 100 || metric.value < 60) ? 'abnormal' : 'normal';
           }
         }
       });
-
-      // 3. 同步今日步数[cite: 4]
-      todaySteps.value = realtime.activitySteps || realtime.steps || 0;
-
-      // 4. 更新预警条状态
-      hasWarning.value = healthMetrics.value.some(m => m.status === 'abnormal');
       
+      // 步数更新：校验 activitySteps 或 steps 字段[cite: 4]
+      todaySteps.value = realtime.activitySteps !== undefined ? realtime.activitySteps : (realtime.steps || 0);
+      
+      // 更新图表：步数变化后重新绘制柱状图[cite: 4]
+      if (activityChart) {
+        initActivityChart(); 
+      }
+
+      hasWarning.value = healthMetrics.value.some(m => m.status === 'abnormal');
       if (realtime.timestamp) {
         lastUpdateTime.value = new Date(realtime.timestamp).toLocaleTimeString();
       }
@@ -179,7 +207,6 @@ const fetchHealthData = async () => {
   }
 }
 
-// 图表初始化逻辑
 let activityChart: echarts.ECharts | null = null
 let healthChart: echarts.ECharts | null = null
 
@@ -190,32 +217,70 @@ const initActivityChart = () => {
     activityChart.setOption({
       tooltip: { trigger: 'axis' },
       xAxis: { type: 'category', data: ['周一', '周二', '周三', '周四', '周五', '周六', '今日'] },
-      yAxis: { type: 'value', name: '步数' },
-      series: [{
-        name: '步数',
-        type: 'bar',
-        data: [4200, 5100, 6300, 4800, 7200, 5432, todaySteps.value], // 最后一天显示实时步数[cite: 4]
-        itemStyle: { color: '#1890ff' }
+      yAxis: { type: 'value' },
+      series: [{ 
+        type: 'bar', 
+        data: [4200, 5100, 6300, 4800, 7200, 5432, todaySteps.value], 
+        itemStyle: { color: '#1890ff' } 
       }]
     })
   }
 }
 
+const initHealthChart = () => {
+  const chartDom = document.getElementById('healthChart')
+  if (chartDom) {
+    healthChart = echarts.init(chartDom)
+    updateHealthChart()
+  }
+}
+
+const updateHealthChart = () => {
+  if (!healthChart) return
+  const data = healthTrendData.value[timeRange.value as 'week' | 'month']
+  const series = selectedMetrics.value.map(metric => ({
+    name: { heartRate: '心率', bloodOxygen: '血氧', bloodPressure: '血压', bodyTemperature: '体温' }[metric as keyof typeof healthTrendData.value.week],
+    type: 'line',
+    smooth: true,
+    data: (data as any)[metric]
+  }))
+  healthChart.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: series.map(item => item.name) },
+    xAxis: { type: 'category', boundaryGap: false, data: data.dates },
+    yAxis: { type: 'value' },
+    series
+  }, true)
+}
+
+watch([timeRange, selectedMetrics], () => { updateHealthChart() })
+
 onMounted(async () => {
-  await fetchHealthData(); // 先加载数据[cite: 4]
+  await fetchHealthData();
   initActivityChart();
+  initHealthChart();
+  window.addEventListener('resize', () => {
+    activityChart?.resize();
+    healthChart?.resize();
+  })
 })
 </script>
 
 <style scoped>
-.health-status { display: flex; flex-direction: column; gap: 24px; }
-.page-title { font-size: 24px; font-weight: bold; margin: 0 0 16px 0; color: #333; }
+.health-status { display: flex; flex-direction: column; gap: 24px; padding: 20px; }
+.page-title { font-size: 24px; font-weight: bold; color: #333; }
+.warning-content { display: flex; justify-content: space-between; align-items: center; }
+.level-value { margin-left: 8px; padding: 4px 12px; border-radius: 12px; color: white; }
+.level-value.low { background-color: #52c41a; }
+.level-value.medium { background-color: #faad14; }
+.level-value.high { background-color: #f5222d; }
 .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-.metric-item { padding: 16px; background-color: #f9f9f9; border-radius: 8px; text-align: center; transition: all 0.3s; }
-.metric-value { font-size: 24px; font-weight: bold; color: #333; margin-bottom: 8px; }
-.metric-status { font-size: 12px; padding: 2px 8px; border-radius: 10px; display: inline-block; }
-.metric-status.normal { background-color: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
-.metric-status.abnormal { background-color: #fff2f0; color: #f5222d; border: 1px solid #ffccc7; }
-.activity-item { display: flex; align-items: center; padding: 24px; background-color: #f9f9f9; border-radius: 8px; }
+.metric-item { padding: 16px; background-color: #f9f9f9; border-radius: 8px; text-align: center; }
+.metric-value { font-size: 24px; font-weight: bold; }
+.metric-status.normal { color: #52c41a; }
+.metric-status.abnormal { color: #f5222d; }
+.activity-content { display: flex; gap: 24px; margin-bottom: 24px; }
+.activity-item { flex: 1; display: flex; align-items: center; padding: 24px; background-color: #f9f9f9; border-radius: 8px; }
 .activity-icon { font-size: 48px; color: #1890ff; margin-right: 16px; }
+.trend-controls { display: flex; align-items: center; }
 </style>
