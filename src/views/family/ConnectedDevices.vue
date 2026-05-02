@@ -102,37 +102,30 @@ const form = reactive({ name: '', age: 70, deviceId: '', relation: '亲属' });
 // 获取数据
 const fetchStatus = async () => {
   try {
-    // 1. 获取后端返回的原始响应
-    const res = await request.get(`/family/my-elderly/${userId}`);[cite: 1]
+    // 1. 发送请求。由于 request.js 已经带了 /api，这里不需要再加 /api[cite: 6, 7]
+    const data = await request.get(`/family/my-elderly/${userId}`); 
     
-    // 2. 核心适配：根据后端 sendSuccess 逻辑，数据通常在 res.data 中
-    // 同时兼容某些 request 拦截器直接返回 res.data 的情况
-    const dataList = res.data || res;[cite: 3]
+    console.log('拦截器处理后的数据:', data); 
 
-    // 3. 判断是否为有效的数组且有数据
-    if (Array.isArray(dataList) && dataList.length > 0) {
-      hasBinding.value = true;[cite: 1]
+    // 2. 此时 data 直接就是后端返回的那个数组[cite: 7]
+    if (Array.isArray(data) && data.length > 0) {
+      hasBinding.value = true;[cite: 6]
+      const info = data[0];[cite: 6]
       
-      // 4. 取出第一条记录
-      const info = dataList[0];[cite: 1]
-      
-      // 5. 重点：确保字段名对齐。
-      // 模板里用的是 deviceInfo.device_id_str，而后端映射里有 id
       deviceInfo.value = {
         ...info,
-        device_id_str: info.device_id_str || info.id // 字段兜底逻辑[cite: 1, 3]
+        // 兼容后端转换后的 id 字段[cite: 4, 6]
+        device_id_str: info.device_id_str || info.id 
       };
       
-      // 6. 预填表单数据[cite: 1]
-      form.name = info.name;
-      form.age = info.age;
+      form.name = info.name;[cite: 6]
+      form.age = info.age;[cite: 6]
     } else {
-      // 如果没查到数据，明确设为 false，显示“未关联”状态[cite: 1]
-      hasBinding.value = false;
+      hasBinding.value = false;[cite: 6]
     }
   } catch (e) { 
-    console.error('获取设备绑定状态失败:', e); 
-    hasBinding.value = false;
+    console.error('获取绑定状态失败:', e); 
+    hasBinding.value = false;[cite: 6]
   }
 };
 
