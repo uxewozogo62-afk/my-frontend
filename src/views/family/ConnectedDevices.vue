@@ -102,15 +102,38 @@ const form = reactive({ name: '', age: 70, deviceId: '', relation: '亲属' });
 // 获取数据
 const fetchStatus = async () => {
   try {
-    const res = await request.get(`/family/my-elderly/${userId}`);
-    if (res && res.length > 0) {
-      hasBinding.value = true;
-      deviceInfo.value = res[0];
-      // 预填表单，方便“更换”
-      form.name = res[0].name;
-      form.age = res[0].age;
+    // 1. 获取后端返回的原始响应
+    const res = await request.get(`/family/my-elderly/${userId}`);[cite: 1]
+    
+    // 2. 核心适配：根据后端 sendSuccess 逻辑，数据通常在 res.data 中
+    // 同时兼容某些 request 拦截器直接返回 res.data 的情况
+    const dataList = res.data || res;[cite: 3]
+
+    // 3. 判断是否为有效的数组且有数据
+    if (Array.isArray(dataList) && dataList.length > 0) {
+      hasBinding.value = true;[cite: 1]
+      
+      // 4. 取出第一条记录
+      const info = dataList[0];[cite: 1]
+      
+      // 5. 重点：确保字段名对齐。
+      // 模板里用的是 deviceInfo.device_id_str，而后端映射里有 id
+      deviceInfo.value = {
+        ...info,
+        device_id_str: info.device_id_str || info.id // 字段兜底逻辑[cite: 1, 3]
+      };
+      
+      // 6. 预填表单数据[cite: 1]
+      form.name = info.name;
+      form.age = info.age;
+    } else {
+      // 如果没查到数据，明确设为 false，显示“未关联”状态[cite: 1]
+      hasBinding.value = false;
     }
-  } catch (e) { console.error(e); }
+  } catch (e) { 
+    console.error('获取设备绑定状态失败:', e); 
+    hasBinding.value = false;
+  }
 };
 
 const handleFullSetup = async () => {
