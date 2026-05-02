@@ -90,5 +90,13 @@ export const warningApi = {
   getStatistics: (): Promise<any> => 
     request.get('/warnings/statistics')
 };
-
+// 家属端相关 API (你现在最需要的)
+export const familyApi = {
+  /**
+   * 根据家属 ID 获取关联的老人列表及其设备状态
+   * 对应后端：/api/family/my-elderly/:userId
+   */
+  getMyElderly: (userId: string | number): Promise<any[]> => 
+    request.get(`/family/my-elderly/${userId}`)
+};
 export default request;
