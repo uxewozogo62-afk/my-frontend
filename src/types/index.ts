@@ -17,15 +17,14 @@ export interface User {
 
 // 定义健康数据类型
 export interface HealthData {
-  heartRate: number;
-  bloodOxygen: number;
-  bodyTemperature: number;
-  bloodPressure: string;
-  sleepQuality: number;
-  respiratoryRate: number;
-  bloodSugar: number;
-  fallDetected: boolean;
-  medicationAdherence: number;
+  _id?: number;              // 数据库主键
+  elderly_id: number;        // 关联的老人ID[cite: 31]
+  heartRate: number;         // 对应数据库 heartRate[cite: 31]
+  bloodOxygen: number;       // 对应数据库 bloodOxygen[cite: 31]
+  bodyTemperature: number;   // 对应数据库 bodyTemperature[cite: 31]
+  bloodPressure: string;     // 对应数据库 bloodPressure[cite: 31]
+  activitySteps: number;     // 对应数据库 activitySteps (替换掉之前的呼吸率等)[cite: 31]
+  timestamp?: string;        // 对应数据库记录时间[cite: 31]
 }
 
 // 定义健康趋势数据类型
