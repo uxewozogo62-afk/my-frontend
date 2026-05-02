@@ -102,43 +102,35 @@ const form = reactive({ name: '', age: 70, deviceId: '', relation: '亲属' });
 // 获取数据
 const fetchStatus = async () => {
   try {
-    // 1. 发送请求：axios 实例已经配置了 baseURL 和 /api 前缀
-    // 注意：确保 userId 已经从 localStorage 正确获取[cite: 6]
-    if (!userId) {
-      console.error('未找到用户 ID，请重新登录');
-      return;
-    }
+    // 检查是否有用户ID
+    if (!userId) return;
 
-    const res = await request.get(`/family/my-elderly/${userId}`);[cite: 6]
+    // 发送请求
+    const res = await request.get(`/family/my-elderly/${userId}`);
     
-    // 2. 关键排查：因为拦截器里写了 return res.data[cite: 5]
-    // 这里的 res 变量其实已经是后端返回的那个数组本身了
-    console.log('后端返回数据详情:', res); 
+    // 调试打印：如果编译成功，你可以在浏览器 F12 看到这个
+    console.log('数据返回成功:', res);
 
-    // 3. 严谨的数组判断[cite: 6]
+    // 适配拦截器剥离后的数据 (res 直接就是数组)
     if (res && Array.isArray(res) && res.length > 0) {
-      hasBinding.value = true;[cite: 6]
+      hasBinding.value = true;
+      const info = res[0];
       
-      // 4. 获取第一条记录并处理字段兼容性
-      const info = res[0];[cite: 6]
+      // 字段兼容性处理
       deviceInfo.value = {
         ...info,
-        // 兼容处理：如果后端返回的是 id，则映射到模板需要的 device_id_str[cite: 2, 6]
-        device_id_str: info.device_id_str || info.id || '未知序列号' 
+        device_id_str: info.device_id_str || info.id || '无序列号'[cite: 4]
       };
       
-      // 5. 预填表单[cite: 6]
+      // 填充表单
       form.name = info.name || '';
       form.age = info.age || 70;
     } else {
-      // 如果返回空数组，说明该用户没绑定老人[cite: 6]
-      hasBinding.value = false;[cite: 6]
+      hasBinding.value = false;
     }
-  } catch (e) { 
-    // 这里会捕获 404、500 等网络错误[cite: 5]
-    console.error('获取绑定状态时发生错误:', e); 
-    hasBinding.value = false; 
-    message.error('无法连接到服务器，请检查后端运行状态');
+  } catch (e) {
+    console.error('获取状态失败:', e);
+    hasBinding.value = false;
   }
 };
 
