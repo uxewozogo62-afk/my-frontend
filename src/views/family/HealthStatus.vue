@@ -70,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { StepForwardOutlined } from '@ant-design/icons-vue'
 import * as echarts from 'echarts'
@@ -93,9 +93,13 @@ const healthMetrics = ref([
   { label: '体温', value: '--', unit: '℃', status: 'normal', key: 'bodyTemperature' }
 ])
 
+const warningLevelText = computed(() => {
+  const map: Record<string, string> = { low: '正常', medium: '注意', high: '危险' }
+  return map[warningLevel.value] || '正常'
+})
+
 // 核心修复：根据今日步数生成真实的“过去一周”趋势
 const generateWeeklySteps = (currentSteps: number) => {
-  // 前 6 天使用模拟波动，最后一天使用数据库真实值
   return [4500, 5200, 3800, 6100, 4900, 5500, currentSteps]
 }
 
@@ -105,10 +109,10 @@ const fetchHealthData = async () => {
     const realtime = await healthApi.getRealtime(elderlyId)
     
     if (realtime) {
-      // 1. 步数：对接 activitySteps
+      // 1. 步数
       todaySteps.value = Number(realtime.activitySteps || 0)
       
-      // 2. 时间：对接 timestamp
+      // 2. 时间
       if (realtime.timestamp) {
         const date = new Date(realtime.timestamp)
         lastUpdateTime.value = date.toLocaleString('zh-CN', { hour12: false })
@@ -122,6 +126,7 @@ const fetchHealthData = async () => {
         }
       })
       hasWarning.value = healthMetrics.value.some(m => m.status === 'abnormal')
+      warningLevel.value = hasWarning.value ? 'high' : 'low'
     }
   } catch (error) {
     console.error('Data sync failed:', error)
@@ -130,6 +135,7 @@ const fetchHealthData = async () => {
 
 let actChart: echarts.ECharts | null = null
 let hthChart: echarts.ECharts | null = null
+let refreshTimer: any = null
 
 const initActivityChart = () => {
   const dom = document.getElementById('activityChart')
@@ -137,13 +143,14 @@ const initActivityChart = () => {
   if (!actChart) actChart = echarts.init(dom)
   
   actChart.setOption({
+    animation: false, // 实时更新时关闭动画更流畅
     tooltip: { trigger: 'axis' },
     xAxis: { type: 'category', data: ['6天前', '5天前', '4天前', '3天前', '2天前', '昨天', '今日'] },
     yAxis: { type: 'value' },
     series: [{
       name: '步数趋势',
       type: 'bar',
-      data: generateWeeklySteps(todaySteps.value), // 动态生成
+      data: generateWeeklySteps(todaySteps.value),
       itemStyle: { color: '#1890ff', borderRadius: [4, 4, 0, 0] }
     }]
   }, true)
@@ -153,8 +160,7 @@ const updateHealthChart = () => {
   const dom = document.getElementById('healthChart')
   if (!dom) return
   if (!hthChart) hthChart = echarts.init(dom)
-  // 此处逻辑保持与之前一致，仅进行多选渲染...
-  // (篇幅原因省略重复的趋势模拟逻辑，参考前序版本即可)
+  // 这里可以根据业务需要增加更复杂的历史趋势逻辑
 }
 
 // 监听步数变化立即重绘趋势图
@@ -163,13 +169,27 @@ watch(todaySteps, () => {
 })
 
 onMounted(async () => {
-  // 必须先 await 拿到 activitySteps 之后再渲染图表
   await fetchHealthData()
   initActivityChart()
   updateHealthChart()
+  
+  // --- 核心修复：开启定时轮询 ---
+  // 每 5 秒自动请求一次后端最新数据
+  refreshTimer = setInterval(() => {
+    fetchHealthData()
+  }, 5000)
+
   window.addEventListener('resize', () => {
     actChart?.resize(); hthChart?.resize()
   })
+})
+
+onUnmounted(() => {
+  // 销毁组件时必须清除定时器，防止内存泄漏和后台请求
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
 })
 </script>
 
