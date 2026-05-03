@@ -36,8 +36,11 @@
         <div class="activity-item">
           <div class="activity-icon"><step-forward-outlined /></div>
           <div class="activity-info">
-            <div class="activity-label">今日实时步数 (activitySteps)</div>
-            <div class="activity-value">{{ todaySteps }}</div>
+            <div class="activity-label">今日实时步数 / 目标 8000 步</div>
+            <div class="activity-value">
+              {{ todaySteps }} 
+              <span class="target-value">/ 8000</span>
+            </div>
             <a-progress :percent="Math.min(100, Math.floor(todaySteps/8000*100))" status="active" />
           </div>
         </div>
@@ -202,4 +205,5 @@ onUnmounted(() => {
 .activity-item { display: flex; align-items: center; padding: 20px; background: #fafafa; border-radius: 8px; }
 .activity-icon { font-size: 40px; color: #1890ff; margin-right: 15px; }
 .activity-value { font-size: 32px; font-weight: bold; color: #1890ff; }
+.target-value { font-size: 16px; color: #999; font-weight: normal; margin-left: 8px; }
 </style>
