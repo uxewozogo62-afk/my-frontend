@@ -27,26 +27,30 @@
     <a-row :gutter="16" style="margin-top: 24px;">
       <a-col :span="8">
         <a-card title="实时心率">
-          <div style="font-size: 28px; color: #cf1322; font-weight: bold;">
-            78 <small style="font-size: 14px;">bpm</small>
+          <div :style="{ fontSize: '28px', color: getHeartRateColor(healthData.heartRate), fontWeight: 'bold' }">
+            {{ healthData.heartRate || '--' }} <small style="font-size: 14px;">bpm</small>
           </div>
-          <div style="color: #52c41a; margin-top: 8px;">● 状态正常</div>
+          <div :style="{ color: getStatusColor(healthData.heartRate, 60, 100), marginTop: '8px' }">
+            ● {{ getStatusText(healthData.heartRate, 60, 100) }}
+          </div>
         </a-card>
       </a-col>
       <a-col :span="8">
         <a-card title="血氧浓度">
           <div style="font-size: 28px; color: #1890ff; font-weight: bold;">
-            98 <small style="font-size: 14px;">%</small>
+            {{ healthData.bloodOxygen || '--' }} <small style="font-size: 14px;">%</small>
           </div>
-          <div style="color: #52c41a; margin-top: 8px;">● 浓度优秀</div>
+          <div :style="{ color: getStatusColor(healthData.bloodOxygen, 95, 100), marginTop: '8px' }">
+            ● {{ healthData.bloodOxygen >= 95 ? '浓度优秀' : '浓度偏低' }}
+          </div>
         </a-card>
       </a-col>
       <a-col :span="8">
-        <a-card title="当前位置">
+        <a-card title="采集状态">
           <div style="font-size: 16px; font-weight: bold; margin-bottom: 8px;">
-            {{ elderlyInfo.community }}内
+            数据采集自：智能手环
           </div>
-          <div style="color: #8c8c8c;">最后更新：刚刚</div>
+          <div style="color: #8c8c8c;">最后更新：{{ lastUpdateTime }}</div>
         </a-card>
       </a-col>
     </a-row>
@@ -58,44 +62,81 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-// 替换为统一的请求工具
 import request from '../../utils/request'
 import { message } from 'ant-design-vue'
 
 const route = useRoute()
 const loading = ref(true)
 const elderlyInfo = ref({})
+const healthData = ref({
+  heartRate: null,
+  bloodOxygen: null,
+  timestamp: null
+})
+const lastUpdateTime = ref('等待更新...')
+let refreshTimer = null
 
-/**
- * 获取老人详细信息
- */
+const getHeartRateColor = (val) => {
+  if (!val) return '#bfbfbf'
+  return (val > 100 || val < 60) ? '#cf1322' : '#52c41a'
+}
+
+const getStatusColor = (val, min, max) => {
+  if (!val) return '#bfbfbf'
+  return (val >= min && val <= max) ? '#52c41a' : '#cf1322'
+}
+
+const getStatusText = (val, min, max) => {
+  if (!val) return '加载中'
+  return (val >= min && val <= max) ? '状态正常' : '指标异常'
+}
+
 const fetchDetail = async () => {
-  loading.value = true
   try {
-    // 这里的 ID 是从路由参数中获取的
     const id = route.params.id
-    // 拦截器已处理 code 判断和 data 剥离
     const data = await request.get(`/admin/elderly/${id}`)
-    
-    // 直接赋值给响应式变量
     elderlyInfo.value = data
   } catch (error) {
-    // 拦截器会自动通过 message.error 弹出后端传回的错误信息
     console.error('获取详情失败:', error)
   } finally {
     loading.value = false
   }
 }
 
+const fetchRealtimeHealth = async () => {
+  try {
+    const id = route.params.id
+    // 调用家属端同款实时数据接口
+    const data = await request.get(`/health/realtime/${id}`)
+    if (data) {
+      healthData.value = data
+      if (data.timestamp) {
+        const date = new Date(data.timestamp)
+        lastUpdateTime.value = date.toLocaleTimeString('zh-CN', { hour12: false })
+      }
+    }
+  } catch (error) {
+    console.error('实时数据同步失败:', error)
+  }
+}
+
 onMounted(() => {
-  if (route.params.id) {
+  const id = route.params.id
+  if (id) {
     fetchDetail()
+    fetchRealtimeHealth()
+    // 开启 5 秒轮询
+    refreshTimer = setInterval(fetchRealtimeHealth, 5000)
   } else {
     message.error('未找到有效的老人 ID')
     loading.value = false
   }
+})
+
+onUnmounted(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
 })
 </script>
 

@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '../../utils/request'
 
@@ -132,7 +132,17 @@ const fetchData = async () => {
   }
 }
 
-onMounted(fetchData)
+let refreshTimer: any = null
+
+onMounted(() => {
+  fetchData()
+  // 每 10 秒刷新一次全局概览数据
+  refreshTimer = setInterval(fetchData, 10000)
+})
+
+onUnmounted(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
+})
 
 const viewDetail = (id: any) => {
   router.push(`/admin/elderly-detail/${id}`)
