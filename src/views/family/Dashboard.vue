@@ -57,16 +57,27 @@ const goToHealthReport = () => {
 };
 
 const checkStatus = async () => {
+  if (!userId) return; // 增加防御
   try {
-    const res = await request.get(`/family/my-elderly/${userId}`);
+    const res = await request.get(\`/family/my-elderly/\${userId}\`);
     if (res && res.length > 0) {
       hasBinding.value = true;
       elderlyInfo.value = res[0];
+    } else {
+      hasBinding.value = false;
     }
-  } catch (e) { console.error(e); }
+  } catch (e) { 
+    console.error('检查绑定状态失败:', e);
+    hasBinding.value = false;
+  }
 };
 
-onMounted(checkStatus);
+onMounted(() => {
+  checkStatus();
+  // 增加定时检查，确保状态实时同步
+  const timer = setInterval(checkStatus, 5000);
+  onUnmounted(() => clearInterval(timer));
+});
 </script>
 
 <style scoped>

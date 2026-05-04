@@ -125,7 +125,6 @@ const fetchHealthData = async () => {
     })
   } catch (error) {
     console.error('Data sync failed:', error)
-    // 即使失败也渲染
     nextTick(() => {
       renderActivityChart()
       renderHealthChart()
@@ -152,12 +151,14 @@ const renderActivityChart = () => {
     const label = i === 0 ? '今日' : `${d.getMonth() + 1}/${d.getDate()}`
     days.push(label)
     
-    // 简单的日期匹配逻辑
+    // 严格日期匹配：YYYY-MM-DD
     const dateStr = d.toISOString().split('T')[0]
     const dayData = historyData.value.filter(item => item.timestamp && item.timestamp.includes(dateStr))
     if (dayData.length > 0) {
+      // 真实数据：取当天最大的步数
       steps.push(Math.max(...dayData.map(r => r.activitySteps || 0)))
     } else {
+      // 无数据则为 0
       steps.push(0)
     }
   }
@@ -166,12 +167,13 @@ const renderActivityChart = () => {
     tooltip: { trigger: 'axis' },
     grid: { left: '40', right: '20', bottom: '30', top: '20' },
     xAxis: { type: 'category', data: days },
-    yAxis: { type: 'value' },
+    yAxis: { type: 'value', minInterval: 1 },
     series: [{
-      name: '步数',
+      name: '步数趋势',
       type: 'bar',
       data: steps,
-      itemStyle: { color: '#1890ff', borderRadius: [4, 4, 0, 0] }
+      itemStyle: { color: '#1890ff', borderRadius: [4, 4, 0, 0] },
+      barWidth: '40%'
     }]
   }, true)
 }
@@ -200,7 +202,7 @@ const renderHealthChart = () => {
     grid: { left: '40', right: '20', bottom: '30', top: '40' },
     xAxis: { type: 'time' },
     yAxis: { type: 'value', scale: true },
-    series: series.length > 0 ? series : [{ type: 'line', data: [] }]
+    series: series.length > 0 ? series : [{ name: '暂无数据', type: 'line', data: [] }]
   }, true)
 }
 
