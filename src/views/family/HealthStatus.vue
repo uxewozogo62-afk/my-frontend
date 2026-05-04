@@ -118,7 +118,7 @@ const fetchHealthData = async () => {
     }
 
     const trends = await healthApi.getHistory(elderlyId)
-    console.log('raw trends:', trends)
+
     historyData.value = Array.isArray(trends) ? trends : []
     
     nextTick(() => {
