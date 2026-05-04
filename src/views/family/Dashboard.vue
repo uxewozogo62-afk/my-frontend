@@ -35,7 +35,8 @@ const router = useRouter();
 const hasBinding = ref(false);
 const elderlyInfo = ref({});
 const warningLevel = ref('low');
-const userId = localStorage.getItem('userId');
+const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
+const userId = userInfo._id || userInfo.id
 
 const getWarningText = (level) => {
   const map = { 'low': '安全', 'medium': '注意', 'high': '紧急' };
