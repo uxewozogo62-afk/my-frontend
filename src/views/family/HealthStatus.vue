@@ -154,13 +154,10 @@ const renderActivityChart = () => {
     days.push(label)
     
     const dateStr = d.toISOString().split('T')[0]
-    const dayData = historyData.value.filter(item => item.timestamp && item.timestamp.includes(dateStr))
-    if (dayData.length > 0) {
-      // 取当天最后一条记录的步数（即当天的最终步数）
-      steps.push(dayData[0].activitySteps || 0) // 因为后端返回的是 reverse() 后的数据，第一条就是最新的
-    } else {
-      steps.push(0)
-    }
+    const dayData = historyData.value.filter(item =>
+    item.timestamp && item.timestamp.startsWith(dateStr)
+    )
+    steps.push(dayData.length > 0 ? (dayData[dayData.length - 1].activitySteps || 0) : 0)
   }
 
   actChart.setOption({
