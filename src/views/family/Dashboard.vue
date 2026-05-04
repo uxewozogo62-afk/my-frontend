@@ -9,7 +9,6 @@
           <div class="level-value">{{ getWarningText(warningLevel) }}</div>
         </div>
 
-        <!-- 关键修改：调用跳转函数[cite: 3] -->
         <a-button type="primary" @click="goToHealthReport" block size="large">
           查看详细健康报表
         </a-button>
@@ -28,14 +27,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router'; // 必须引入路由[cite: 3]
+import { ref, onMounted, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
 import request from '../../utils/request';
 
 const router = useRouter();
 const hasBinding = ref(false);
 const elderlyInfo = ref({});
-const warningLevel = ref('low'); // 默认正常(低风险)
+const warningLevel = ref('low');
 const userId = localStorage.getItem('userId');
 
 const getWarningText = (level) => {
@@ -43,7 +42,6 @@ const getWarningText = (level) => {
   return map[level] || '未知';
 };
 
-// 完整跳转逻辑：携带老人 ID 进报表页[cite: 3]
 const goToHealthReport = () => {
   if (elderlyInfo.value && elderlyInfo.value._id) {
     router.push({
@@ -51,15 +49,14 @@ const goToHealthReport = () => {
       query: { id: elderlyInfo.value._id }
     });
   } else {
-    // 降级处理，防止无 ID 时出错
     router.push('/family/health');
   }
 };
 
 const checkStatus = async () => {
-  if (!userId) return; // 增加防御
+  if (!userId) return;
   try {
-    const res = await request.get(\`/family/my-elderly/\${userId}\`);
+    const res = await request.get(`/family/my-elderly/${userId}`);
     if (res && res.length > 0) {
       hasBinding.value = true;
       elderlyInfo.value = res[0];
@@ -74,7 +71,7 @@ const checkStatus = async () => {
 
 onMounted(() => {
   checkStatus();
-  // 增加定时检查，确保状态实时同步
+  // 5秒自动刷新一次绑定状态
   const timer = setInterval(checkStatus, 5000);
   onUnmounted(() => clearInterval(timer));
 });
