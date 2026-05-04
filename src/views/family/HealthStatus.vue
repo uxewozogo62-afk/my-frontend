@@ -45,13 +45,13 @@
         </div>
       </div>
       <div class="activity-trend">
-        <h3>过去一周步数趋势 (真实数据)</h3>
+        <h3>过去一周步数趋势</h3>
         <div id="activityChart" style="height: 300px; width: 100%;"></div>
       </div>
     </a-card>
 
     <!-- 4. 健康历史趋势 -->
-    <a-card title="健康历史趋势 (真实数据)" class="trend-card">
+    <a-card title="健康历史趋势" class="trend-card">
       <template #extra>
         <div class="trend-controls">
           <a-select v-model:value="selectedMetrics" mode="multiple" style="width: 220px;" size="small" placeholder="选择展示指标">
@@ -62,7 +62,6 @@
         </div>
       </template>
       <div id="healthChart" style="height: 400px; width: 100%;"></div>
-      <div v-if="historyData.length === 0" class="empty-chart-hint">暂无历史健康数据</div>
     </a-card>
   </div>
 </template>
@@ -96,7 +95,6 @@ const warningLevelText = computed(() => {
   return map[warningLevel.value] || '正常'
 })
 
-// 获取数据逻辑
 const fetchHealthData = async () => {
   try {
     const elderlyId = route.query.id as string || '1'
@@ -118,7 +116,6 @@ const fetchHealthData = async () => {
       warningLevel.value = hasWarning.value ? 'high' : 'low'
     }
 
-    // 获取历史趋势数据
     const trends = await healthApi.getTrends(elderlyId)
     if (trends && Array.isArray(trends)) {
       historyData.value = trends
@@ -145,22 +142,30 @@ const initActivityChart = () => {
   if (!dom) return
   if (!actChart) actChart = echarts.init(dom)
   
-  // 处理过去 7 天的步数逻辑
   const days = []
   const steps = []
+  
+  // 更加鲁棒的日期匹配逻辑
   for (let i = 6; i >= 0; i--) {
     const d = new Date()
     d.setDate(d.getDate() - i)
-    const dateStr = d.toISOString().split('T')[0]
+    const dateKey = d.toLocaleDateString('zh-CN').replace(/\//g, '-') // 格式化为 YYYY-MM-DD
+    
     days.push(i === 0 ? '今日' : `${d.getMonth() + 1}/${d.getDate()}`)
     
-    // 从历史数据中寻找该天的步数，没有则为 0
-    const dayData = historyData.value.find(item => item.timestamp && item.timestamp.startsWith(dateStr))
+    // 在历史数据中寻找匹配该日期的记录
+    const dayData = historyData.value.find(item => {
+      if (!item.timestamp) return false
+      const itemDate = new Date(item.timestamp).toLocaleDateString('zh-CN').replace(/\//g, '-')
+      return itemDate === dateKey
+    })
+    
     steps.push(dayData ? dayData.activitySteps : 0)
   }
 
   actChart.setOption({
     tooltip: { trigger: 'axis' },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
     xAxis: { type: 'category', data: days },
     yAxis: { type: 'value' },
     series: [{
@@ -174,8 +179,15 @@ const initActivityChart = () => {
 
 const initHealthChart = () => {
   const dom = document.getElementById('healthChart')
-  if (!dom || historyData.value.length === 0) return
+  if (!dom) return
   if (!hthChart) hthChart = echarts.init(dom)
+
+  if (historyData.value.length === 0) {
+    hthChart.showLoading({ text: '暂无历史数据', showSpinner: false })
+    return
+  } else {
+    hthChart.hideLoading()
+  }
 
   const series = selectedMetrics.value.map(metric => {
     const metricInfo = healthMetrics.value.find(m => m.key === metric)
@@ -183,15 +195,25 @@ const initHealthChart = () => {
       name: metricInfo?.label || metric,
       type: 'line',
       smooth: true,
-      connectNulls: false, // 核心修改：不自动连接空值，有数据就画，没数据就断开
-      data: historyData.value.map(item => [item.timestamp, item[metric]])
+      showSymbol: true,
+      data: historyData.value.map(item => [new Date(item.timestamp).getTime(), item[metric]])
     }
   })
 
   hthChart.setOption({
     tooltip: { trigger: 'axis' },
     legend: { data: selectedMetrics.value.map(m => healthMetrics.value.find(hm => hm.key === m)?.label) },
-    xAxis: { type: 'time', splitLine: { show: false } },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { 
+      type: 'time', 
+      splitLine: { show: false },
+      axisLabel: {
+        formatter: (value) => {
+          const date = new Date(value)
+          return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}`
+        }
+      }
+    },
     yAxis: { type: 'value', scale: true },
     series: series
   }, true)
@@ -222,5 +244,4 @@ onUnmounted(() => {
 .activity-icon { font-size: 40px; color: #1890ff; margin-right: 15px; }
 .activity-value { font-size: 32px; font-weight: bold; color: #1890ff; }
 .target-value { font-size: 16px; color: #999; font-weight: normal; margin-left: 8px; }
-.empty-chart-hint { text-align: center; padding: 40px; color: #999; }
 </style>
