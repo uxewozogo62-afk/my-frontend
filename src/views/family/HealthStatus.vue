@@ -117,12 +117,11 @@ const fetchHealthData = async () => {
     }
 
     const trends = await healthApi.getTrends(elderlyId)
-    if (trends && Array.isArray(trends)) {
-      historyData.value = trends
-      updateCharts()
-    }
+    historyData.value = (trends && Array.isArray(trends)) ? trends : []
+    updateCharts()
   } catch (error) {
     console.error('Data sync failed:', error)
+    updateCharts() // 失败也要渲染空图表
   }
 }
 
@@ -145,34 +144,31 @@ const initActivityChart = () => {
   const days = []
   const steps = []
   
-  // 更加鲁棒的日期匹配逻辑
   for (let i = 6; i >= 0; i--) {
     const d = new Date()
     d.setDate(d.getDate() - i)
-    const dateKey = d.toLocaleDateString('zh-CN').replace(/\//g, '-') // 格式化为 YYYY-MM-DD
-    
+    const dateKey = d.toLocaleDateString('zh-CN').replace(/\//g, '-')
     days.push(i === 0 ? '今日' : `${d.getMonth() + 1}/${d.getDate()}`)
     
-    // 在历史数据中寻找匹配该日期的记录
     const dayData = historyData.value.find(item => {
       if (!item.timestamp) return false
       const itemDate = new Date(item.timestamp).toLocaleDateString('zh-CN').replace(/\//g, '-')
       return itemDate === dateKey
     })
-    
     steps.push(dayData ? dayData.activitySteps : 0)
   }
 
   actChart.setOption({
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: days },
-    yAxis: { type: 'value' },
+    xAxis: { type: 'category', data: days, axisTick: { alignWithLabel: true } },
+    yAxis: { type: 'value', minInterval: 1 },
     series: [{
       name: '步数',
       type: 'bar',
       data: steps,
-      itemStyle: { color: '#1890ff', borderRadius: [4, 4, 0, 0] }
+      itemStyle: { color: '#1890ff', borderRadius: [4, 4, 0, 0] },
+      barWidth: '40%'
     }]
   }, true)
 }
@@ -182,12 +178,11 @@ const initHealthChart = () => {
   if (!dom) return
   if (!hthChart) hthChart = echarts.init(dom)
 
-  if (historyData.value.length === 0) {
-    hthChart.showLoading({ text: '暂无历史数据', showSpinner: false })
-    return
-  } else {
-    hthChart.hideLoading()
-  }
+  // 即使没有历史数据，也构造一个包含“今日”的时间轴
+  const now = new Date().getTime()
+  const displayData = historyData.value.length > 0 
+    ? historyData.value 
+    : [{ timestamp: new Date().toISOString(), heartRate: 0, bloodOxygen: 0, bodyTemperature: 0 }]
 
   const series = selectedMetrics.value.map(metric => {
     const metricInfo = healthMetrics.value.find(m => m.key === metric)
@@ -196,7 +191,7 @@ const initHealthChart = () => {
       type: 'line',
       smooth: true,
       showSymbol: true,
-      data: historyData.value.map(item => [new Date(item.timestamp).getTime(), item[metric]])
+      data: displayData.map(item => [new Date(item.timestamp).getTime(), item[metric] || 0])
     }
   })
 
@@ -214,7 +209,7 @@ const initHealthChart = () => {
         }
       }
     },
-    yAxis: { type: 'value', scale: true },
+    yAxis: { type: 'value', scale: true, min: 0 },
     series: series
   }, true)
 }
