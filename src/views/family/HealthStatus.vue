@@ -98,8 +98,9 @@ const warningLevelText = computed(() => {
 const fetchHealthData = async () => {
   try {
     const elderlyId = route.query.id as string || '1'
-    const realtime = await healthApi.getRealtime(elderlyId)
     
+    // 1. 获取实时数据
+    const realtime = await healthApi.getRealtime(elderlyId)
     if (realtime) {
       todaySteps.value = Number(realtime.activitySteps || 0)
       if (realtime.timestamp) {
@@ -116,7 +117,8 @@ const fetchHealthData = async () => {
       warningLevel.value = hasWarning.value ? 'high' : 'low'
     }
 
-    const trends = await healthApi.getTrends(elderlyId)
+    // 2. 获取历史数据 (修正方法名为 getHistory)
+    const trends = await healthApi.getHistory(elderlyId)
     historyData.value = Array.isArray(trends) ? trends : []
     
     nextTick(() => {
@@ -151,7 +153,7 @@ const renderActivityChart = () => {
     const label = i === 0 ? '今日' : `${d.getMonth() + 1}/${d.getDate()}`
     days.push(label)
     
-    // 采用更稳健的日期匹配方式
+    // 匹配日期 YYYY-MM-DD
     const year = d.getFullYear()
     const month = String(d.getMonth() + 1).padStart(2, '0')
     const day = String(d.getDate()).padStart(2, '0')
