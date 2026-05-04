@@ -152,7 +152,7 @@ const renderActivityChart = () => {
     const label = i === 0 ? '今日' : `${d.getMonth() + 1}/${d.getDate()}`
     days.push(label)
     
-    const dateStr = d.toISOString().split('T')[0]
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
     const dayData = historyData.value.filter(item => item.timestamp && item.timestamp.includes(dateStr))
     if (dayData.length > 0) {
       // 取当天最后一条记录的步数（即当天的最终步数）
@@ -186,6 +186,7 @@ const renderHealthChart = () => {
   for (let i = 6; i >= 0; i--) {
     const d = new Date(now)
     d.setDate(d.getDate() - i)
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
     days.push(d.toISOString().split('T')[0])
   }
 
