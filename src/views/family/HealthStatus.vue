@@ -95,15 +95,6 @@ const warningLevelText = computed(() => {
   return map[warningLevel.value] || '正常'
 })
 
-// 辅助函数：将任何日期格式转换为 YYYY-MM-DD
-const formatDateKey = (dateInput: any) => {
-  const d = new Date(dateInput)
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 const fetchHealthData = async () => {
   try {
     const elderlyId = route.query.id as string || '1'
@@ -126,10 +117,19 @@ const fetchHealthData = async () => {
     }
 
     const trends = await healthApi.getTrends(elderlyId)
-    historyData.value = (trends && Array.isArray(trends)) ? trends : []
-    updateCharts()
+    historyData.value = Array.isArray(trends) ? trends : []
+    
+    nextTick(() => {
+      renderActivityChart()
+      renderHealthChart()
+    })
   } catch (error) {
     console.error('Data sync failed:', error)
+    // 即使失败也渲染
+    nextTick(() => {
+      renderActivityChart()
+      renderHealthChart()
+    })
   }
 }
 
@@ -137,32 +137,26 @@ let actChart: echarts.ECharts | null = null
 let hthChart: echarts.ECharts | null = null
 let refreshTimer: any = null
 
-const updateCharts = () => {
-  nextTick(() => {
-    initActivityChart()
-    initHealthChart()
-  })
-}
-
-const initActivityChart = () => {
+const renderActivityChart = () => {
   const dom = document.getElementById('activityChart')
   if (!dom) return
   if (!actChart) actChart = echarts.init(dom)
   
   const days = []
   const steps = []
+  const now = new Date()
   
   for (let i = 6; i >= 0; i--) {
-    const d = new Date()
+    const d = new Date(now)
     d.setDate(d.getDate() - i)
-    const dateKey = formatDateKey(d)
-    days.push(i === 0 ? '今日' : `${d.getMonth() + 1}/${d.getDate()}`)
+    const label = i === 0 ? '今日' : `${d.getMonth() + 1}/${d.getDate()}`
+    days.push(label)
     
-    // 查找该日期下步数最大的记录（通常是当天的最终步数）
-    const dayRecords = historyData.value.filter(item => formatDateKey(item.timestamp) === dateKey)
-    if (dayRecords.length > 0) {
-      const maxSteps = Math.max(...dayRecords.map(r => r.activitySteps || 0))
-      steps.push(maxSteps)
+    // 简单的日期匹配逻辑
+    const dateStr = d.toISOString().split('T')[0]
+    const dayData = historyData.value.filter(item => item.timestamp && item.timestamp.includes(dateStr))
+    if (dayData.length > 0) {
+      steps.push(Math.max(...dayData.map(r => r.activitySteps || 0)))
     } else {
       steps.push(0)
     }
@@ -170,20 +164,19 @@ const initActivityChart = () => {
 
   actChart.setOption({
     tooltip: { trigger: 'axis' },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    grid: { left: '40', right: '20', bottom: '30', top: '20' },
     xAxis: { type: 'category', data: days },
     yAxis: { type: 'value' },
     series: [{
       name: '步数',
       type: 'bar',
       data: steps,
-      itemStyle: { color: '#1890ff', borderRadius: [4, 4, 0, 0] },
-      barWidth: '40%'
+      itemStyle: { color: '#1890ff', borderRadius: [4, 4, 0, 0] }
     }]
   }, true)
 }
 
-const initHealthChart = () => {
+const renderHealthChart = () => {
   const dom = document.getElementById('healthChart')
   if (!dom) return
   if (!hthChart) hthChart = echarts.init(dom)
@@ -195,9 +188,8 @@ const initHealthChart = () => {
       type: 'line',
       smooth: true,
       showSymbol: true,
-      // 过滤掉没有该指标的数据点
       data: historyData.value
-        .filter(item => item[metric] !== null && item[metric] !== undefined)
+        .filter(item => item[metric] !== null && item.timestamp)
         .map(item => [new Date(item.timestamp).getTime(), item[metric]])
     }
   })
@@ -205,23 +197,14 @@ const initHealthChart = () => {
   hthChart.setOption({
     tooltip: { trigger: 'axis' },
     legend: { data: selectedMetrics.value.map(m => healthMetrics.value.find(hm => hm.key === m)?.label) },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { 
-      type: 'time', 
-      splitLine: { show: false },
-      axisLabel: {
-        formatter: (value) => {
-          const date = new Date(value)
-          return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`
-        }
-      }
-    },
+    grid: { left: '40', right: '20', bottom: '30', top: '40' },
+    xAxis: { type: 'time' },
     yAxis: { type: 'value', scale: true },
-    series: series
+    series: series.length > 0 ? series : [{ type: 'line', data: [] }]
   }, true)
 }
 
-watch(selectedMetrics, () => initHealthChart())
+watch(selectedMetrics, () => renderHealthChart())
 
 onMounted(async () => {
   await fetchHealthData()
