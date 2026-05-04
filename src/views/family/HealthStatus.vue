@@ -151,14 +151,16 @@ const renderActivityChart = () => {
     const label = i === 0 ? '今日' : `${d.getMonth() + 1}/${d.getDate()}`
     days.push(label)
     
-    // 严格日期匹配：YYYY-MM-DD
-    const dateStr = d.toISOString().split('T')[0]
-    const dayData = historyData.value.filter(item => item.timestamp && item.timestamp.includes(dateStr))
+    // 采用更稳健的日期匹配方式
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const dateKey = `${year}-${month}-${day}`
+    
+    const dayData = historyData.value.filter(item => item.timestamp && item.timestamp.includes(dateKey))
     if (dayData.length > 0) {
-      // 真实数据：取当天最大的步数
       steps.push(Math.max(...dayData.map(r => r.activitySteps || 0)))
     } else {
-      // 无数据则为 0
       steps.push(0)
     }
   }
