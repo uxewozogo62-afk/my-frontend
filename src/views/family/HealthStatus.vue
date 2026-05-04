@@ -54,10 +54,11 @@
     <a-card title="健康历史趋势" class="trend-card">
       <template #extra>
         <div class="trend-controls">
-          <a-select v-model:value="selectedMetrics" mode="multiple" style="width: 220px;" size="small" placeholder="选择展示指标">
+          <a-select v-model:value="selectedMetrics" mode="multiple" style="width: 300px;" size="small" placeholder="选择展示指标">
             <a-select-option value="heartRate">心率</a-select-option>
             <a-select-option value="bloodOxygen">血氧</a-select-option>
             <a-select-option value="bodyTemperature">体温</a-select-option>
+            <a-select-option value="bloodPressure">血压</a-select-option>
           </a-select>
         </div>
       </template>
@@ -80,7 +81,7 @@ const todaySteps = ref(0)
 const lastUpdateTime = ref('--:--:--')
 const hasWarning = ref(false)
 const warningLevel = ref('low')
-const selectedMetrics = ref(['heartRate', 'bloodOxygen'])
+const selectedMetrics = ref(['heartRate', 'bloodOxygen', 'bloodPressure'])
 const historyData = ref([])
 
 const healthMetrics = ref([
@@ -98,9 +99,8 @@ const warningLevelText = computed(() => {
 const fetchHealthData = async () => {
   try {
     const elderlyId = route.query.id as string || '1'
-    
-    // 1. 获取实时数据
     const realtime = await healthApi.getRealtime(elderlyId)
+    
     if (realtime) {
       todaySteps.value = Number(realtime.activitySteps || 0)
       if (realtime.timestamp) {
@@ -117,7 +117,6 @@ const fetchHealthData = async () => {
       warningLevel.value = hasWarning.value ? 'high' : 'low'
     }
 
-    // 2. 获取历史数据 (修正方法名为 getHistory)
     const trends = await healthApi.getHistory(elderlyId)
     historyData.value = Array.isArray(trends) ? trends : []
     
@@ -153,15 +152,11 @@ const renderActivityChart = () => {
     const label = i === 0 ? '今日' : `${d.getMonth() + 1}/${d.getDate()}`
     days.push(label)
     
-    // 匹配日期 YYYY-MM-DD
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    const dateKey = `${year}-${month}-${day}`
-    
-    const dayData = historyData.value.filter(item => item.timestamp && item.timestamp.includes(dateKey))
+    const dateStr = d.toISOString().split('T')[0]
+    const dayData = historyData.value.filter(item => item.timestamp && item.timestamp.includes(dateStr))
     if (dayData.length > 0) {
-      steps.push(Math.max(...dayData.map(r => r.activitySteps || 0)))
+      // 取当天最后一条记录的步数（即当天的最终步数）
+      steps.push(dayData[0].activitySteps || 0) // 因为后端返回的是 reverse() 后的数据，第一条就是最新的
     } else {
       steps.push(0)
     }
@@ -171,13 +166,12 @@ const renderActivityChart = () => {
     tooltip: { trigger: 'axis' },
     grid: { left: '40', right: '20', bottom: '30', top: '20' },
     xAxis: { type: 'category', data: days },
-    yAxis: { type: 'value', minInterval: 1 },
+    yAxis: { type: 'value' },
     series: [{
-      name: '步数趋势',
+      name: '步数',
       type: 'bar',
       data: steps,
-      itemStyle: { color: '#1890ff', borderRadius: [4, 4, 0, 0] },
-      barWidth: '40%'
+      itemStyle: { color: '#1890ff', borderRadius: [4, 4, 0, 0] }
     }]
   }, true)
 }
@@ -187,26 +181,55 @@ const renderHealthChart = () => {
   if (!dom) return
   if (!hthChart) hthChart = echarts.init(dom)
 
-  const series = selectedMetrics.value.map(metric => {
-    const metricInfo = healthMetrics.value.find(m => m.key === metric)
-    return {
-      name: metricInfo?.label || metric,
-      type: 'line',
-      smooth: true,
-      showSymbol: true,
-      data: historyData.value
-        .filter(item => item[metric] !== null && item.timestamp)
-        .map(item => [new Date(item.timestamp).getTime(), item[metric]])
+  const days = []
+  const now = new Date()
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(d.getDate() - i)
+    days.push(d.toISOString().split('T')[0])
+  }
+
+  const series: any[] = []
+  
+  selectedMetrics.value.forEach(metric => {
+    if (metric === 'bloodPressure') {
+      // 血压拆分为收缩压和舒张压
+      const sysData = days.map(day => {
+        const dayData = historyData.value.filter(item => item.timestamp && item.timestamp.includes(day))
+        if (dayData.length === 0) return 0
+        const values = dayData.map(item => parseInt(String(item.bloodPressure || '0/0').split('/')[0]))
+        return Math.round(values.reduce((a, b) => a + b, 0) / values.length)
+      })
+      const diaData = days.map(day => {
+        const dayData = historyData.value.filter(item => item.timestamp && item.timestamp.includes(day))
+        if (dayData.length === 0) return 0
+        const values = dayData.map(item => parseInt(String(item.bloodPressure || '0/0').split('/')[1]))
+        return Math.round(values.reduce((a, b) => a + b, 0) / values.length)
+      })
+      series.push({ name: '收缩压', type: 'line', smooth: true, data: sysData })
+      series.push({ name: '舒张压', type: 'line', smooth: true, data: diaData })
+    } else {
+      const metricInfo = healthMetrics.value.find(m => m.key === metric)
+      const data = days.map(day => {
+        const dayData = historyData.value.filter(item => item.timestamp && item.timestamp.includes(day))
+        if (dayData.length === 0) return 0
+        const values = dayData.map(item => parseFloat(item[metric]) || 0)
+        return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10
+      })
+      series.push({ name: metricInfo?.label || metric, type: 'line', smooth: true, data })
     }
   })
 
   hthChart.setOption({
     tooltip: { trigger: 'axis' },
-    legend: { data: selectedMetrics.value.map(m => healthMetrics.value.find(hm => hm.key === m)?.label) },
-    grid: { left: '40', right: '20', bottom: '30', top: '40' },
-    xAxis: { type: 'time' },
+    legend: { top: 0 },
+    grid: { left: '40', right: '20', bottom: '30', top: '60' },
+    xAxis: { 
+      type: 'category', 
+      data: days.map(d => `${d.split('-')[1]}/${d.split('-')[2]}`)
+    },
     yAxis: { type: 'value', scale: true },
-    series: series.length > 0 ? series : [{ name: '暂无数据', type: 'line', data: [] }]
+    series: series
   }, true)
 }
 
