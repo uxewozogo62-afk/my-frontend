@@ -95,6 +95,15 @@ const warningLevelText = computed(() => {
   return map[warningLevel.value] || '正常'
 })
 
+// 辅助函数：将任何日期格式转换为 YYYY-MM-DD
+const formatDateKey = (dateInput: any) => {
+  const d = new Date(dateInput)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 const fetchHealthData = async () => {
   try {
     const elderlyId = route.query.id as string || '1'
@@ -121,7 +130,6 @@ const fetchHealthData = async () => {
     updateCharts()
   } catch (error) {
     console.error('Data sync failed:', error)
-    updateCharts() // 失败也要渲染空图表
   }
 }
 
@@ -147,22 +155,24 @@ const initActivityChart = () => {
   for (let i = 6; i >= 0; i--) {
     const d = new Date()
     d.setDate(d.getDate() - i)
-    const dateKey = d.toLocaleDateString('zh-CN').replace(/\//g, '-')
+    const dateKey = formatDateKey(d)
     days.push(i === 0 ? '今日' : `${d.getMonth() + 1}/${d.getDate()}`)
     
-    const dayData = historyData.value.find(item => {
-      if (!item.timestamp) return false
-      const itemDate = new Date(item.timestamp).toLocaleDateString('zh-CN').replace(/\//g, '-')
-      return itemDate === dateKey
-    })
-    steps.push(dayData ? dayData.activitySteps : 0)
+    // 查找该日期下步数最大的记录（通常是当天的最终步数）
+    const dayRecords = historyData.value.filter(item => formatDateKey(item.timestamp) === dateKey)
+    if (dayRecords.length > 0) {
+      const maxSteps = Math.max(...dayRecords.map(r => r.activitySteps || 0))
+      steps.push(maxSteps)
+    } else {
+      steps.push(0)
+    }
   }
 
   actChart.setOption({
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: days, axisTick: { alignWithLabel: true } },
-    yAxis: { type: 'value', minInterval: 1 },
+    xAxis: { type: 'category', data: days },
+    yAxis: { type: 'value' },
     series: [{
       name: '步数',
       type: 'bar',
@@ -178,12 +188,6 @@ const initHealthChart = () => {
   if (!dom) return
   if (!hthChart) hthChart = echarts.init(dom)
 
-  // 即使没有历史数据，也构造一个包含“今日”的时间轴
-  const now = new Date().getTime()
-  const displayData = historyData.value.length > 0 
-    ? historyData.value 
-    : [{ timestamp: new Date().toISOString(), heartRate: 0, bloodOxygen: 0, bodyTemperature: 0 }]
-
   const series = selectedMetrics.value.map(metric => {
     const metricInfo = healthMetrics.value.find(m => m.key === metric)
     return {
@@ -191,7 +195,10 @@ const initHealthChart = () => {
       type: 'line',
       smooth: true,
       showSymbol: true,
-      data: displayData.map(item => [new Date(item.timestamp).getTime(), item[metric] || 0])
+      // 过滤掉没有该指标的数据点
+      data: historyData.value
+        .filter(item => item[metric] !== null && item[metric] !== undefined)
+        .map(item => [new Date(item.timestamp).getTime(), item[metric]])
     }
   })
 
@@ -205,11 +212,11 @@ const initHealthChart = () => {
       axisLabel: {
         formatter: (value) => {
           const date = new Date(value)
-          return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}`
+          return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`
         }
       }
     },
-    yAxis: { type: 'value', scale: true, min: 0 },
+    yAxis: { type: 'value', scale: true },
     series: series
   }, true)
 }
