@@ -119,6 +119,7 @@ const fetchHealthData = async () => {
 
     const trends = await healthApi.getHistory(elderlyId)
     historyData.value = Array.isArray(trends) ? trends : []
+    console.log('historyData sample:', historyData.value.slice(0, 3))
     
     nextTick(() => {
       renderActivityChart()
